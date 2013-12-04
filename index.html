@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head runat="server">
+
+  <script src="Scripts/jquery-1.4.1-vsdoc.js" type="text/javascript">
+</script>
+  <script src="Scripts/jquery-1.4.1.min.js" type="text/javascript">
+</script>
+  <script src="Scripts/jquery-1.4.1.js" type="text/javascript">
+</script>
+  <script src="Scripts/newGuid.js" type="text/javascript">
+</script>
+  <script src="Scripts/dbSetup.js" type="text/javascript">
+</script>
+  <script src="Scripts/objectBusinessLayer.js" type="text/javascript">
+</script>
+
+  <title>Dive into</title>
+</head>
+
+<body>
+  <div>
+    <script>
+	$(document).ready(function () {
+
+  
+		var indexedDB = window.indexedDB || window.webkitIndexedDB || window.mozIndexedDB || window.msIndexedDB;
+		var IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction;
+		var db; 
+
+		function indexedDBOk() {return "indexedDB" in window;}
+
+		//within the document.ready function, document.bind is required.
+		$(document).bind("ready", function(){
+		if(!indexedDBOk) return;
+		//Open database
+		var openRequest = indexedDB.open("idarticle_people27",1);
+
+		openRequest.onupgradeneeded = function(e) {
+		console.log("running onupgradeneeded");
+			//Get the table schema
+			var tables = getDBSchema();
+			var thisDB = e.target.result;
+			//Cycle through each table schema object in tables creating the object store as it goes
+			tables.forEach(function(table){
+			 //If the table object doesn't exist, create it.
+			 if(!thisDB.objectStoreNames.contains(table.dbName)) {
+			var objectStore = thisDB.createObjectStore(table.dbName,{keyPath: table.keyPath});
+			var indices = table.indices;
+			//cycle through the indices in the table schema to create the indices
+			indices.forEach(function(index){
+					objectStore.createIndex(index.indexName,index.indexName, {unique:index.unique});
+											});
+									};
+							});
+			}
+
+		openRequest.onsuccess = function(e) {
+				console.log("running onsuccess");
+				db = e.target.result;        
+			}
+
+		openRequest.onerror = function(e) {
+				console.log("Error");
+				console.dir(e);
+			}
+			
+		});
+
+		function getPerson(e) {
+		var key = document.querySelector("#key").value;
+		var transaction = db.transaction(["people"],"readonly");
+		var store = transaction.objectStore("people");
+		var request = store.get(key);
+
+		request.onsuccess = function(e) {
+		console.log("Record found");
+			var result = e.target.result;
+			console.dir(result);
+			if(result) {
+				var s = "<h2>Key "+key+"<\/h2><p>";
+				for(var field in result) {
+					s+= field+"="+result[field]+"<br/>";
+				}
+				document.querySelector("#status").innerHTML = s;
+			} else {
+				document.querySelector("#status").innerHTML = "<h2>No match<\/h2>";
+			}   
+		}   
+		}
+
+		function getName(e){
+			var name = document.querySelector("#nameSearch").value;
+			if(name === "" ) return;
+
+
+			var transaction = db.transaction(["people"],"readonly");
+			var store = transaction.objectStore("people");
+			var index = store.index("name");
+
+
+			var request = index.get(name);
+
+
+			request.onsuccess = function(e) {
+
+
+					var result = e.target.result;
+					if(result) {
+							var s = "<h2>Name "+name+"<\/h2><p>";
+							for(var field in result) {
+									s+= field+"="+result[field]+"<br/>";
+							}
+							document.querySelector("#status3").innerHTML = s;
+					} else {
+							document.querySelector("#status3").innerHTML = "<h2>No match<\/h2>";
+					}        
+			}        
+
+		};
+
+		function getPeoples(e) {
+		var name = document.querySelector("#nameStartSearch").value;
+
+		var endname = document.querySelector("#nameSearchEnd").value;
+
+		if(name == "" && endname == "") return;
+
+		var transaction = db.transaction(["people"],"readonly");
+		var store = transaction.objectStore("people");
+		var index = store.index("name");
+
+		//Make the range depending on what type we are doing
+		var range;
+		if(name != "" && endname != "") {
+			range = IDBKeyRange.bound(name, endname);
+		} else if(name == "") {
+			range = IDBKeyRange.upperBound(endname);
+		} else {
+			range = IDBKeyRange.lowerBound(name);
+		}
+
+		var s = "";
+
+		index.openCursor(range).onsuccess = function(e) {
+			var cursor = e.target.result;
+			if(cursor) {
+				s += "<h2>Key "+cursor.key+"<\/h2><p>";
+				for(var field in cursor.value) {
+					s+= field+"="+cursor.value[field]+"<br/>";
+				}
+				s+="<\/p>";
+				cursor.continue();
+			}
+			document.querySelector("#status").innerHTML = s;
+		}
+
+		};
+				
+		function SendPerson(e) {
+			var cursor = e.target.result;
+				jQuery.support.cors = true;
+		window.URL = window.URL || window.webkitURL;
+		var xmlhttp=new XMLHttpRequest();
+		var person;
+		xmlhttp.open("GET","elephant.png",true);
+		xmlhttp.responseType = "blob";
+
+		xmlhttp.onreadystatechange=function()
+		{ if(xmlhttp.readyState==4&&xmlhttp.status==200)
+		{
+			   person = {
+							name: "Bill",
+							email: newGuid(),
+							id:newGuid(),
+													pic: xmlhttp.response
+													//pic: blob
+													};
+													//addThePerson(person);
+													return person;
+			}
+		}
+						$.ajax({
+							url: 'http://localhost:57385/api/Admin',
+							type: 'POST',
+							data: person,
+							dataType: 'json',
+							success: function () {
+										console.log("Success");
+							},
+							error: function (x, y, z) {
+								alert(x + '\n' + y + '\n' + z);
+							}
+						});
+		};
+						
+		$('#deletePersonButton').click(function(){
+			DeletePerson(db, $('#id').val());
+			$('#id').val('');
+		});				
+		
+		$('#editPersonButton').click(function(){
+							var person = {
+								name:$('#name').val(),
+								email:$('#email').val(),
+								created:new Date(),
+								id:$('#id').val()
+								}
+							EditPerson(db, person)
+							$('#name').val("");
+							$('#email').val("");
+							$('#id').val("");
+						});
+						
+		$('#getAllButton').click(function(){
+						var people = getPeople(db);
+						});
+
+		$('#getButton').click(function(){
+			//Contact the server and retreive all data.
+			GetPeopleFromServer(db);
+			});
+
+		$('#sendPersonButton').click(function(){
+				SendPeople(db);
+			});
+
+			
+		$('#addButton').click(function(){
+// Create XHR
+            var xhr = new XMLHttpRequest(),
+                blob;
+ 
+            xhr.open("GET", "abe.jpg", true);
+            // Set the responseType to blob
+            xhr.responseType = "arraybuffer";
+ 	var person;
+	
+
+	var oReq = new XMLHttpRequest(); 
+	var im;
+	var input = $('#imageFile')[0].files[0]
+	var reader = new FileReader();
+	reader.onload = (function(theFile) {
+          // Render thumbnail.
+		im =  theFile.target.result
+
+
+      // Read in the image file as a data URL.
+
+
+					
+	person = {
+			name:$('#name').val(),
+			email:$('#email').val(),
+			pic: im.split(",")[1],
+			created:new Date(),
+			id:newGuid()
+		};
+		addThePerson(db, person);
+      });
+       reader.readAsDataURL(input);           
+ 
+	});
+	
+	});
+
+	
+    </script> 
+	<input type="text" id="id" placeholder="Id" /><br />
+    <input type="text" id="name" placeholder="Name" /><br />
+    <input type="email" id="email" placeholder="Email" /><br />
+    <button id="addButton">Add Data</button><button id="editPersonButton">Edit Person</button> <button id=
+    "deletePersonButton">Delete Person</button><input type="text" id="key" placeholder="Key" /><br />
+    <button id="getButton">Get Data</button>
+    <div id="status"></div><button id="getAllButton">Get Everyone</button>
+
+    <div id="status2"></div><input type="text" id="nameSearch" placeholder="Name Search" /><br />
+    <button id="getNameButton">Get Name</button>
+
+    <div id="status3"></div>Starting with: <input type="text" id="nameStartSearch" placeholder="Name" /><br />
+    Ending with: <input type="text" id="nameSearchEnd" placeholder="Name" /><br />
+    <button id="getCritButton">Get By Name Range</button><br />
+    <button id="sendPersonButton">Send Person</button> <span id="stage"></span> <button id="getServerPeopleButton">Get People From
+    the Server</button><br />
+    <button id="getImageButton">Get Image</button>
+	<input type="file" id="imageFile">
+  </div>
+</body>
+</html>
